@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gemini 質感文學翻譯工作站 v2.1</title>
+  <title>Gemini 質感文學翻譯工作站 v3.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Mammoth.js 用於讀取 Word (.docx) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -21,20 +21,20 @@
       <div class="flex items-center gap-2">
         <span class="text-2xl">📖</span>
         <h1 class="text-lg font-bold text-amber-400">Gemini 雙語文學翻譯站</h1>
-        <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">v2.1 自動重試版</span>
+        <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">v3.0 穩定連線版</span>
       </div>
 
-      <!-- 模型與 API Key 設定區塊 -->
+      <!-- 設定區塊 -->
       <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
         <div class="flex items-center gap-1.5">
           <label for="modelSelect" class="text-xs text-slate-400 whitespace-nowrap">🤖 模型：</label>
           <select id="modelSelect" class="bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-amber-300 focus:outline-none focus:border-amber-400">
-            <option value="gemini-3.8-flash" selected>gemini-3.8-flash (最新主力)</option>
-            <option value="gemini-3.8-flash-lite">gemini-3.8-flash-lite (輕量防塞車)</option>
-            <option value="gemini-3.8-pro">gemini-3.8-pro (高階精細)</option>
-            <option value="custom">手動輸入其他模型...</option>
+            <option value="gemini-2.0-flash" selected>gemini-2.0-flash (推薦最穩)</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash (備用穩定)</option>
+            <option value="gemini-2.0-pro-exp-02-05">gemini-2.0-pro-exp</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
           </select>
-          <input type="text" id="customModelInput" placeholder="輸入模型名稱" class="hidden bg-slate-950 border border-amber-500 rounded px-2 py-1.5 text-xs text-slate-200 w-36 focus:outline-none" />
+          <button id="detectModelsBtn" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1.5 rounded text-slate-300" title="點擊自動獲取你帳號可用的所有模型清單">🔄 刷新清單</button>
         </div>
 
         <div class="flex items-center gap-1.5 flex-1 sm:flex-initial">
@@ -76,7 +76,7 @@
 
       <!-- 翻譯原則提示 -->
       <div class="bg-slate-900/60 border border-slate-700/50 rounded-lg p-2.5 text-xs text-slate-400 space-y-1">
-        <p class="text-amber-300 font-medium">✨ 已套用翻譯規則（含 503 塞車自動排隊重試）：</p>
+        <p class="text-amber-300 font-medium">✨ 已套用翻譯規則：</p>
         <p>1. 拒絕武俠腔與老派古風 ｜ 2. 逐句完整翻譯不刪減 ｜ 3. 語句修飾自然美麗不超譯 ｜ 4. 中英逐句嚴格對照排列</p>
       </div>
 
@@ -124,7 +124,7 @@
     const apiKeyInput = document.getElementById('apiKeyInput');
     const saveKeyBtn = document.getElementById('saveKeyBtn');
     const modelSelect = document.getElementById('modelSelect');
-    const customModelInput = document.getElementById('customModelInput');
+    const detectModelsBtn = document.getElementById('detectModelsBtn');
     const sourceText = document.getElementById('sourceText');
     const charCount = document.getElementById('charCount');
     const fileInput = document.getElementById('fileInput');
@@ -151,11 +151,45 @@
       if (!key) return alert('請先輸入 API Key！');
       localStorage.setItem('gemini_api_key', key);
       alert('✅ API Key 已成功儲存！');
+      loadAvailableModels(key);
     });
 
-    modelSelect.addEventListener('change', () => {
-      customModelInput.classList.toggle('hidden', modelSelect.value !== 'custom');
+    // 自動抓取可用的模型清單
+    async function loadAvailableModels(key) {
+      if (!key) return;
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const validModels = (data.models || [])
+          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+          .map(m => m.name.replace('models/', ''));
+
+        if (validModels.length > 0) {
+          modelSelect.innerHTML = '';
+          validModels.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m + (m.includes('2.0-flash') ? ' (建議)' : '');
+            if (m.includes('2.0-flash')) opt.selected = true;
+            modelSelect.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.warn('自動取得模型清單失敗，使用預設清單');
+      }
+    }
+
+    detectModelsBtn.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (!key) return alert('請先輸入並儲存 API Key！');
+      loadAvailableModels(key);
+      alert('已重新整理可用模型清單！');
     });
+
+    if (savedKey) {
+      loadAvailableModels(savedKey);
+    }
 
     sourceText.addEventListener('input', () => {
       charCount.textContent = `${sourceText.value.length} 字元`;
@@ -216,7 +250,7 @@
       }
     });
 
-    // 智慧分段合併（將零碎短句組合成約 1500 字元的區塊，減少 API 呼叫次數防塞車）
+    // 段落合併
     function chunkParagraphs(text, maxChars = 1500) {
       const rawLines = text.split(/\n+/).map(p => p.trim()).filter(Boolean);
       const chunks = [];
@@ -233,12 +267,10 @@
       return chunks;
     }
 
-    // 延遲等待工具
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // 呼叫 Gemini API（含 503/429 自動排隊重試機制）
-    async function callGeminiWithRetry(apiKey, modelName, systemPrompt, currentChunk, signal, onRetryStatus) {
-      const maxRetries = 4;
+    // 執行請求
+    async function callGemini(apiKey, modelName, systemPrompt, currentChunk, signal, onStatusUpdate) {
       const payload = {
         contents: [{ parts: [{ text: `請依規則逐句翻譯以下內容（務必拆分為單句對照）：\n\n${currentChunk}` }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -258,10 +290,11 @@
         }
       };
 
-      const stdEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const res = await fetch(stdEndpoint, {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -274,30 +307,25 @@
           return JSON.parse(rawOutput || '[]');
         }
 
-        // 若遇到 503 (伺服器忙碌) 或 429 (頻率限制)，自動等待後重試
-        if ((res.status === 503 || res.status === 429) && attempt < maxRetries) {
-          const waitSec = attempt * 4; // 第1次等4秒、第2次等8秒、第3次等12秒
-          for (let s = waitSec; s > 0; s--) {
-            if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-            onRetryStatus(`⏳ 伺服器尖峰忙碌中 (503)，系統將於 ${s} 秒後自動重試 (第 ${attempt}/${maxRetries - 1} 次)...`);
-            await sleep(1000);
-          }
+        if ((res.status === 503 || res.status === 429) && attempt < 3) {
+          onStatusUpdate(`⏳ 伺服器尖峰 (503)，等待 4 秒後重試...`);
+          await sleep(4000);
           continue;
         }
 
         const errData = await res.json().catch(() => ({}));
-        throw new Error(`HTTP 狀態碼 ${res.status} (模型: ${modelName})：${errData.error?.message || '請求被拒絕'}`);
+        throw new Error(`HTTP 狀態碼 ${res.status} (${modelName})：${errData.error?.message || '請求失敗'}`);
       }
     }
 
-    // 開始翻譯流程
+    // 開始翻譯
     startTranslateBtn.addEventListener('click', async () => {
       const apiKey = apiKeyInput.value.trim();
       const text = sourceText.value.trim();
-      const selectedModel = modelSelect.value === 'custom' ? customModelInput.value.trim() : modelSelect.value;
+      const selectedModel = modelSelect.value;
 
       if (!apiKey) return alert('請先在右上角輸入並儲存 Gemini API Key！');
-      if (!selectedModel) return alert('請選擇或輸入模型名稱！');
+      if (!selectedModel) return alert('請選擇翻譯模型！');
       if (!text) return alert('請先輸入欲翻譯的英文內容！');
 
       const chunks = chunkParagraphs(text, 1500);
@@ -324,13 +352,13 @@
           progressBar.style.width = `${percent}%`;
           progressText.textContent = `正在使用 ${selectedModel} 翻譯第 ${i + 1} / ${chunks.length} 區塊...`;
 
-          const sentencePairs = await callGeminiWithRetry(
+          const sentencePairs = await callGemini(
             apiKey,
             selectedModel,
             systemPrompt,
             currentChunk,
             abortController.signal,
-            (retryMsg) => { progressText.textContent = retryMsg; }
+            (msg) => { progressText.textContent = msg; }
           );
 
           const pBlock = document.createElement('div');
