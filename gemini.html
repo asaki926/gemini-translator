@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 質感文學雙語翻譯工作站</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Serif TC & Noto Sans TC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Mammoth.js for DOCX parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- PDF.js for PDF parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                        serif: ['Noto Serif TC', 'Georgia', 'serif'],
+                    },
+                    colors: {
+                        paper: {
+                            50: '#fbf9f5',
+                            100: '#f5f0e6',
+                            200: '#eadecd',
+                            800: '#262421',
+                            900: '#1a1816'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for sleek reading experience */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(107, 114, 128, 0.6);
+        }
+        .reading-typography {
+            line-height: 1.9;
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body class="bg-paper-50 text-stone-800 dark:bg-stone-900 dark:text-stone-100 font-sans min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-paper-50/90 dark:bg-stone-900/90 backdrop-blur-md border-b border-stone-200 dark:border-stone-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-700 dark:bg-amber-600 flex items-center justify-center text-white shadow-sm">
+                    <i data-lucide="book-open-check" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-stone-900 dark:text-white flex items-center gap-2">
+                        Gemini 質感文學翻譯工作站
+                        <span class="hidden sm:inline-block text-xs font-medium px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                            中英逐句對照
+                        </span>
+                    </h1>
+                    <p class="text-xs text-stone-500 dark:text-stone-400 hidden sm:block">支援網頁連結、PDF、Word (.docx) 與長篇純文字小說自動分段精準翻譯</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button id="btn-sample" class="text-xs sm:text-sm px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 transition flex items-center gap-1.5">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-amber-600"></i>
+                    <span>載入範例文章</span>
+                </button>
+                <button id="btn-theme" class="p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 transition" title="切換深淺色主題">
+                    <i data-lucide="moon" class="w-4 h-4 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block text-amber-400"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Left Column: Input & Settings (5 cols on lg) -->
+        <section class="lg:col-span-5 flex flex-col gap-5">
+
+            <!-- Input Source Card -->
+            <div class="bg-white dark:bg-stone-800/90 rounded-2xl shadow-sm border border-stone-200/80 dark:border-stone-700/80 overflow-hidden">
+                <!-- Mode Tabs -->
+                <div class="grid grid-cols-3 border-b border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/50 p-1.5 gap-1">
+                    <button data-tab="text" class="tab-btn active-tab py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-all bg-white dark:bg-stone-700 text-amber-800 dark:text-amber-300 shadow-sm">
+                        <i data-lucide="align-left" class="w-4 h-4"></i>
+                        <span>貼上純文字</span>
+                    </button>
+                    <button data-tab="file" class="tab-btn py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-all text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200">
+                        <i data-lucide="file-up" class="w-4 h-4"></i>
+                        <span>上傳檔案</span>
+                    </button>
+                    <button data-tab="url" class="tab-btn py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-all text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200">
+                        <i data-lucide="globe" class="w-4 h-4"></i>
+                        <span>網頁連結</span>
+                    </button>
+                </div>
+
+                <!-- Tab 1: Plain Text Input -->
+                <div id="panel-text" class="tab-panel p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="source-textarea" class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                            原文內容 (待翻譯文本)
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <span id="char-count" class="text-xs text-stone-400 dark:text-stone-500">0 字元 / 0 詞</span>
+                            <button id="btn-clear-text" class="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition">
+                                清空
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="source-textarea" rows="12" placeholder="請在此貼上想翻譯的英文小說、文章段落，或是從「上傳檔案 / 網頁連結」提取後的文字內容..." class="w-full rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50/50 dark:bg-stone-900/60 p-3.5 text-sm text-stone-800 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-600/50 focus:border-amber-600 transition resize-y leading-relaxed"></textarea>
+                </div>
+
+                <!-- Tab 2: File Upload (.pdf, .docx, .txt) -->
+                <div id="panel-file" class="tab-panel hidden p-4">
+                    <div id="drop-zone" class="border-2 border-dashed border-stone-300 dark:border-stone-600 hover:border-amber-600 dark:hover:border-amber-500 rounded-2xl p-6 text-center cursor-pointer transition bg-stone-50/50 dark:bg-stone-900/30">
+                        <input type="file" id="file-input" accept=".txt,.pdf,.docx,.md" class="hidden" />
+                        <div class="w-12 h-12 rounded-2xl bg-amber-100/80 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center mx-auto mb-3">
+                            <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                        </div>
+                        <p class="text-sm font-medium text-stone-800 dark:text-stone-200 mb-1">點擊選擇檔案，或將檔案拖曳至此</p>
+                        <p class="text-xs text-stone-500 dark:text-stone-400">支援格式：<span class="font-semibold text-amber-700 dark:text-amber-400">PDF (.pdf)</span>、<span class="font-semibold text-amber-700 dark:text-amber-400">Word (.docx)</span>、<span class="font-semibold text-amber-700 dark:text-amber-400">純文字 (.txt / .md)</span></p>
+                    </div>
+
+                    <div id="file-status" class="hidden mt-3 p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2 truncate">
+                            <i data-lucide="file-text" class="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0"></i>
+                            <span id="file-name-label" class="font-medium text-stone-800 dark:text-stone-200 truncate">document.pdf</span>
+                        </div>
+                        <span id="file-extract-badge" class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 font-medium shrink-0">已載入至文字框</span>
+                    </div>
+                    <p class="mt-2.5 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                        💡 檔案解析完成後，文字會自動填入「貼上純文字」分頁中，您可以在開始翻譯前自由檢視或刪減頭尾不需要的目錄與版權頁。
+                    </p>
+                </div>
+
+                <!-- Tab 3: Web URL Extraction -->
+                <div id="panel-url" class="tab-panel hidden p-4">
+                    <label for="url-input" class="block text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
+                        輸入小說或文章網頁連結 (URL)
+                    </label>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <i data-lucide="link" class="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                            <input type="url" id="url-input" placeholder="https://archiveofourown.org/works/... 或任意英文文章網址" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-600/50 focus:border-amber-600 transition" />
+                        </div>
+                        <button id="btn-fetch-url" class="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-900 dark:bg-amber-700 dark:hover:bg-amber-600 text-white text-xs sm:text-sm font-medium transition flex items-center gap-1.5 shrink-0">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>擷取網頁內文</span>
+                        </button>
+                    </div>
+                    <div class="mt-3 p-3 rounded-xl bg-stone-100/80 dark:bg-stone-900/60 border border-stone-200/70 dark:border-stone-700/60 text-xs text-stone-600 dark:text-stone-400 space-y-1.5 leading-relaxed">
+                        <p class="font-medium text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                            <i data-lucide="info" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i>
+                            智慧雙通道網頁擷取說明：
+                        </p>
+                        <p>系統會自動透過 Reader Proxy 與 CORS 通道提取乾淨的網頁正文並填入文字框。若目標網站有極嚴格的真人驗證 (Cloudflare 盾)，您也可以直接複製網頁文字貼回「貼上純文字」分頁。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Translation Rules & Chunk Settings Card -->
+            <div class="bg-white dark:bg-stone-800/90 rounded-2xl shadow-sm border border-stone-200/80 dark:border-stone-700/80 overflow-hidden">
+                <button id="btn-toggle-rules" class="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-stone-50 dark:hover:bg-stone-700/40 transition">
+                    <div class="flex items-center gap-2.5">
+                        <i data-lucide="sliders-horizontal" class="w-4 h-4 text-amber-700 dark:text-amber-400"></i>
+                        <span class="text-sm font-semibold text-stone-800 dark:text-stone-100">翻譯規則與風格設定 (已內建 5 大核心準則)</span>
+                    </div>
+                    <i id="rules-chevron" data-lucide="chevron-down" class="w-4 h-4 text-stone-400 transition-transform duration-200"></i>
+                </button>
+
+                <div id="rules-panel" class="px-4 pb-4 pt-1 border-t border-stone-100 dark:border-stone-700/60 space-y-3">
+                    <div class="text-xs text-stone-600 dark:text-stone-300 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/50 rounded-xl p-3 space-y-1.5">
+                        <div class="font-semibold text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                            <span>目前生效的系統級翻譯守則：</span>
+                            <button id="btn-reset-rules" class="text-[11px] underline text-amber-700 dark:text-amber-400 hover:text-amber-900">還原預設</button>
+                        </div>
+                        <ul class="list-disc list-inside space-y-1 text-stone-600 dark:text-stone-400">
+                            <li><strong>拒絕武俠腔：</strong>嚴禁使用中國武俠小說口吻或老派古風詞彙。</li>
+                            <li><strong>不刪減段落：</strong>嚴格逐句完整翻譯，不遺漏任何細節與描寫。</li>
+                            <li><strong>適度潤飾不超譯：</strong>文筆自然順暢，但不腦補擴寫或過度超譯。</li>
+                            <li><strong>中英文嚴格對照：</strong>堅持「一句英文、一句中文」上下對照排列。</li>
+                            <li><strong>洗鍊現代文學質感：</strong>修飾得漂亮自然，不過度文謅謅。</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <label for="custom-rules" class="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1">
+                            進階系統提示詞微調 (可加上角色譯名表或特定語氣要求)：
+                        </label>
+                        <textarea id="custom-rules" rows="5" class="w-full rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 p-2.5 text-xs text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-600/50"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 pt-1">
+                        <div>
+                            <label for="chunk-size" class="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1">單次分段字元數上限</label>
+                            <select id="chunk-size" class="w-full rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 px-3 py-2 text-xs text-stone-700 dark:text-stone-200">
+                                <option value="1800">1,800 字元 (最穩定、精細逐句)</option>
+                                <option value="2800" selected>2,800 字元 (推薦平衡速度與品質)</option>
+                                <option value="4200">4,200 字元 (適合長篇快速處理)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="glossary-input" class="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1">專有名詞/人名固定譯法 (選填)</label>
+                            <input type="text" id="glossary-input" placeholder="例: Harry=哈利, Auror=正氣師" class="w-full rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 px-3 py-2 text-xs text-stone-700 dark:text-stone-200" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons & Progress Bar -->
+            <div class="bg-white dark:bg-stone-800/90 rounded-2xl shadow-sm border border-stone-200/80 dark:border-stone-700/80 p-4 space-y-3">
+                <div class="flex gap-2.5">
+                    <button id="btn-translate" class="flex-1 py-3 px-5 rounded-xl bg-amber-700 hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500 text-white font-semibold text-sm shadow-sm hover:shadow transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="languages" class="w-5 h-5"></i>
+                        <span id="translate-btn-text">開始中英對照翻譯</span>
+                    </button>
+                    <button id="btn-stop" class="hidden py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="square" class="w-4 h-4 fill-current"></i>
+                        <span>停止</span>
+                    </button>
+                </div>
+
+                <!-- Progress Status Area -->
+                <div id="progress-wrapper" class="hidden space-y-1.5 pt-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span id="progress-status" class="text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-600 animate-ping"></span>
+                            正在準備翻譯第 1 / 1 段...
+                        </span>
+                        <span id="progress-percent" class="text-stone-500 dark:text-stone-400 font-mono">0%</span>
+                    </div>
+                    <div class="w-full h-2 bg-stone-100 dark:bg-stone-700 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-amber-600 dark:bg-amber-500 transition-all duration-300 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Column: Translation Output & Reading View (7 cols on lg) -->
+        <section class="lg:col-span-7 flex flex-col h-full">
+            <div class="bg-white dark:bg-stone-800/90 rounded-2xl shadow-sm border border-stone-200/80 dark:border-stone-700/80 flex flex-col flex-1 min-h-[600px] overflow-hidden">
+
+                <!-- Output Toolbar -->
+                <div class="px-4 sm:px-6 py-3.5 border-b border-stone-200 dark:border-stone-700 flex flex-wrap items-center justify-between gap-3 bg-stone-50/70 dark:bg-stone-800/50">
+                    <!-- View Mode Switch -->
+                    <div class="flex items-center bg-stone-200/70 dark:bg-stone-900 p-1 rounded-xl">
+                        <button id="view-bilingual" class="px-3 py-1.5 rounded-lg text-xs font-medium transition bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-sm flex items-center gap-1.5">
+                            <i data-lucide="rows-2" class="w-3.5 h-3.5 text-amber-600"></i>
+                            <span>中英對照</span>
+                        </button>
+                        <button id="view-zh-only" class="px-3 py-1.5 rounded-lg text-xs font-medium transition text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white flex items-center gap-1.5">
+                            <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                            <span>純中文閱讀</span>
+                        </button>
+                    </div>
+
+                    <!-- Font & Export Actions -->
+                    <div class="flex items-center gap-1.5 sm:gap-2">
+                        <button id="btn-font-size" class="p-2 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 text-xs transition flex items-center gap-1" title="切換字體大小">
+                            <i data-lucide="type" class="w-3.5 h-3.5"></i>
+                            <span id="font-size-label">適中</span>
+                        </button>
+                        <button id="btn-copy" class="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-medium transition flex items-center gap-1.5">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>複製結果</span>
+                        </button>
+                        <button id="btn-download-txt" class="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-medium transition flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                            <span>下載 .txt</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Reading Area -->
+                <div id="output-container" class="flex-1 p-5 sm:p-8 overflow-y-auto reading-typography font-serif text-base">
+                    <!-- Empty State -->
+                    <div id="empty-state" class="h-full min-h-[420px] flex flex-col items-center justify-center text-center max-w-md mx-auto py-12">
+                        <div class="w-16 h-16 rounded-2xl bg-amber-100/70 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex items-center justify-center mb-4">
+                            <i data-lucide="feather" class="w-8 h-8"></i>
+                        </div>
+                        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2 font-sans">準備好開始質感文學翻譯</h2>
+                        <p class="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-sans leading-relaxed mb-6">
+                            請在左側貼上英文小說、上傳 PDF / Word 檔案，或輸入網頁連結。系統將嚴格遵守「不翻成武俠腔、不刪減段落、不過度超譯、中英逐句對照、文筆自然優美」五大原則進行翻譯。
+                        </p>
+                        <div class="w-full text-left bg-paper-100/70 dark:bg-stone-900/70 p-4 rounded-xl border border-stone-200/70 dark:border-stone-800 text-xs font-sans space-y-2">
+                            <div class="font-semibold text-amber-800 dark:text-amber-400">✨ 輸出格式預覽（一句英文、一句中文）：</div>
+                            <p class="text-stone-500 dark:text-stone-400 italic">The rain tapped softly against the tall library windows, blurring the streetlights outside into golden smears.</p>
+                            <p class="text-stone-800 dark:text-stone-200 font-serif text-sm">細雨輕輕敲打著圖書館高聳的窗玻璃，將窗外的街燈暈染成一抹抹金色的光影。</p>
+                        </div>
+                    </div>
+
+                    <!-- Translated Pairs List -->
+                    <div id="translation-results" class="hidden space-y-6"></div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Setup PDF.js worker
+        if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        // Default System Prompt Rules requested by the user
+        const DEFAULT_CUSTOM_RULES = `請將以下內容翻譯為台灣繁體中文，在確保翻譯自然、順暢、漂亮的同時，嚴格遵守以下 5 點規則：
+1. 不要翻得像中國武俠小說口吻（避免使用江湖、大俠、武林、小的、客官、姑娘、罷了等中式古風或中國網路流行語）。
+2. 不要擅自刪減或合併任何段落與句子，必須逐句完整翻譯，保留原文所有細節。
+3. 可以理解為了小說的順暢度和修飾會有潤飾的地方，但不要過度超譯，更不要自己無中生有擴寫。
+4. 中英文對照，嚴格保持「一句英文原文、一句中文翻譯」交錯排列。
+5. 重視翻譯品質，文筆需修飾得漂亮有文學感，但不要超譯或太文謅謅，不要隨意加粗體字或過多驚嘆號。`;
+
+        // State variables
+        let isTranslating = false;
+        let stopRequested = false;
+        let viewMode = 'bilingual'; // 'bilingual' | 'zh-only'
+        let fontSizeIndex = 1; // 0: small, 1: base, 2: large
+        const fontSizes = [
+            { label: '偏小', enClass: 'text-xs', zhClass: 'text-sm' },
+            { label: '適中', enClass: 'text-sm', zhClass: 'text-base sm:text-lg' },
+            { label: '偏大', enClass: 'text-base', zhClass: 'text-lg sm:text-xl' }
+        ];
+        // Store structured translation items: { chunkIndex, pairs: [{ en, zh }] }
+        let translatedChunks = [];
+
+        // DOM Elements
+        const sourceTextarea = document.getElementById('source-textarea');
+        const charCountEl = document.getElementById('char-count');
+        const customRulesTextarea = document.getElementById('custom-rules');
+        const glossaryInput = document.getElementById('glossary-input');
+        const chunkSizeSelect = document.getElementById('chunk-size');
+        const btnTranslate = document.getElementById('btn-translate');
+        const translateBtnText = document.getElementById('translate-btn-text');
+        const btnStop = document.getElementById('btn-stop');
+        const progressWrapper = document.getElementById('progress-wrapper');
+        const progressStatus = document.getElementById('progress-status');
+        const progressPercent = document.getElementById('progress-percent');
+        const progressBar = document.getElementById('progress-bar');
+        const emptyState = document.getElementById('empty-state');
+        const translationResults = document.getElementById('translation-results');
+
+        // Set default rules on load
+        customRulesTextarea.value = DEFAULT_CUSTOM_RULES;
+
+        // Toast Helper (Never use alert/confirm)
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                info: 'bg-stone-800 text-white border-stone-700',
+                success: 'bg-emerald-800 text-white border-emerald-700',
+                error: 'bg-rose-800 text-white border-rose-700'
+            };
+            toast.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg border text-xs sm:text-sm font-medium flex items-center justify-between gap-3 transition-all duration-300 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3800);
+        }
+
+        // Theme Toggle
+        document.getElementById('btn-theme').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+        });
+
+        // Tab Switching
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabPanels = {
+            text: document.getElementById('panel-text'),
+            file: document.getElementById('panel-file'),
+            url: document.getElementById('panel-url')
+        };
+
+        function switchTab(tabName) {
+            tabBtns.forEach(btn => {
+                const isActive = btn.dataset.tab === tabName;
+                btn.className = isActive
+                    ? 'tab-btn active-tab py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-all bg-white dark:bg-stone-700 text-amber-800 dark:text-amber-300 shadow-sm'
+                    : 'tab-btn py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-all text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200';
+            });
+            Object.keys(tabPanels).forEach(key => {
+                tabPanels[key].classList.toggle('hidden', key !== tabName);
+            });
+        }
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        // Character & Word Counter
+        function updateTextStats() {
+            const text = sourceTextarea.value;
+            const chars = text.length;
+            const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+            charCountEl.textContent = `${chars.toLocaleString()} 字元 / ${words.toLocaleString()} 詞`;
+        }
+
+        sourceTextarea.addEventListener('input', updateTextStats);
+
+        document.getElementById('btn-clear-text').addEventListener('click', () => {
+            sourceTextarea.value = '';
+            updateTextStats();
+            showToast('已清空原文內容');
+        });
+
+        // Toggle Rules Panel
+        const rulesPanel = document.getElementById('rules-panel');
+        const rulesChevron = document.getElementById('rules-chevron');
+        document.getElementById('btn-toggle-rules').addEventListener('click', () => {
+            rulesPanel.classList.toggle('hidden');
+            rulesChevron.classList.toggle('rotate-180');
+        });
+
+        document.getElementById('btn-reset-rules').addEventListener('click', () => {
+            customRulesTextarea.value = DEFAULT_CUSTOM_RULES;
+            showToast('已還原預設翻譯規則', 'success');
+        });
+
+        // Sample Novel Loader
+        document.getElementById('btn-sample').addEventListener('click', () => {
+            const sampleText = `The October wind carried the scent of damp fallen leaves and distant woodsmoke as Clara stepped off the evening train. The station platform was nearly deserted, save for an old porter locking up the luggage office and a stray cat grooming itself beneath the amber glow of a wrought-iron lamp.
+
+She pulled her wool coat tighter around her shoulders and glanced at the telegram crumpled in her gloved hand. Three words, written in her brother's unmistakable, hurried scrawl: "Come before winter." No explanation, no return address beyond the name of this half-forgotten coastal town where they had spent their childhood summers.
+
+As she walked down the cobblestone lane toward the harbor, the sound of the tide grew louder, rhythmic and steady against the seawall. In the distance, the windows of Greystone House flickered with warm candlelight, as though someone had been waiting by the parlor glass for hours.`;
+            sourceTextarea.value = sampleText;
+            updateTextStats();
+            switchTab('text');
+            showToast('已載入英文小說範例段落，請點擊「開始中英對照翻譯」體驗效果！', 'success');
+        });
+
+        // File Upload Handling (.txt, .docx, .pdf)
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileStatus = document.getElementById('file-status');
+        const fileNameLabel = document.getElementById('file-name-label');
+        const fileExtractBadge = document.getElementById('file-extract-badge');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-amber-600', 'bg-amber-50/40');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-amber-600', 'bg-amber-50/40');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-amber-600', 'bg-amber-50/40');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFileUpload(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        async function handleFileUpload(file) {
+            fileStatus.classList.remove('hidden');
+            fileNameLabel.textContent = file.name;
+            fileExtractBadge.textContent = '正在解析檔案...';
+            fileExtractBadge.className = 'px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium shrink-0';
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            try {
+                let extractedText = '';
+                if (ext === 'txt' || ext === 'md') {
+                    extractedText = await file.text();
+                } else if (ext === 'docx') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({ arrayBuffer });
+                    extractedText = result.value;
+                } else if (ext === 'pdf') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const pageTexts = [];
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        fileExtractBadge.textContent = `正在解析 PDF (${i}/${pdf.numPages} 頁)...`;
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageStr = textContent.items.map(item => item.str).join(' ');
+                        pageTexts.push(pageStr);
+                    }
+                    extractedText = pageTexts.join('\n\n');
+                } else {
+                    throw new Error('不支援的檔案格式，請上傳 .pdf, .docx, 或 .txt');
+                }
+
+                sourceTextarea.value = extractedText.trim();
+                updateTextStats();
+                fileExtractBadge.textContent = '已載入至文字框';
+                fileExtractBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium shrink-0';
+                showToast(`成功從 ${file.name} 提取文字！`, 'success');
+                setTimeout(() => switchTab('text'), 600);
+            } catch (err) {
+                console.error(err);
+                fileExtractBadge.textContent = '解析失敗';
+                fileExtractBadge.className = 'px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-medium shrink-0';
+                showToast(`檔案解析失敗：${err.message}`, 'error');
+            }
+        }
+
+        // URL Extraction Handling
+        const urlInput = document.getElementById('url-input');
+        const btnFetchUrl = document.getElementById('btn-fetch-url');
+
+        btnFetchUrl.addEventListener('click', async () => {
+            const targetUrl = urlInput.value.trim();
+            if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) {
+                showToast('請輸入有效的 http:// 或 https:// 網頁連結', 'error');
+                return;
+            }
+
+            btnFetchUrl.disabled = true;
+            const originalHtml = btnFetchUrl.innerHTML;
+            btnFetchUrl.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>擷取中...</span>`;
+            lucide.createIcons();
+
+            try {
+                let extractedText = '';
+                // Primary Channel: Jina Reader API (Clean markdown/article extraction)
+                try {
+                    const jinaResp = await fetch(`https://r.jina.ai/${targetUrl}`, {
+                        headers: { 'Accept': 'text/plain' }
+                    });
+                    if (jinaResp.ok) {
+                        const raw = await jinaResp.text();
+                        if (raw && raw.trim().length > 80) {
+                            extractedText = raw.trim();
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Jina Reader fallback triggered');
+                }
+
+                // Fallback Channel: AllOrigins + DOMParser
+                if (!extractedText) {
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+                    const proxyResp = await fetch(proxyUrl);
+                    if (!proxyResp.ok) throw new Error('無法連線至目標網頁');
+                    const data = await proxyResp.json();
+                    if (!data.contents) throw new Error('未取得網頁內容');
+
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data.contents, 'text/html');
+                    // Remove scripts, styles, nav, footer
+                    doc.querySelectorAll('script, style, nav, footer, header, noscript, iframe, aside').forEach(el => el.remove());
+
+                    // Prioritize common novel/article containers (like AO3 #chapters, article, main)
+                    const mainContent = doc.querySelector('#chapters, .userstuff, article, main, [role="main"]') || doc.body;
+                    const paragraphs = Array.from(mainContent.querySelectorAll('p, h1, h2, h3, blockquote'))
+                        .map(p => p.textContent.trim())
+                        .filter(t => t.length > 0);
+
+                    extractedText = paragraphs.length > 0 ? paragraphs.join('\n\n') : mainContent.innerText.trim();
+                }
+
+                if (!extractedText || extractedText.length < 20) {
+                    throw new Error('網頁可能受 Cloudflare 真人驗證保護，請直接複製內文貼上');
+                }
+
+                sourceTextarea.value = extractedText;
+                updateTextStats();
+                switchTab('text');
+                showToast('成功擷取網頁內文！可先在文字框預覽或直接開始翻譯。', 'success');
+            } catch (err) {
+                showToast(`擷取失敗：${err.message}`, 'error');
+            } finally {
+                btnFetchUrl.disabled = false;
+                btnFetchUrl.innerHTML = originalHtml;
+                lucide.createIcons();
+            }
+        });
+
+        // Smart Paragraph Chunking Function so long texts never get truncated
+        function splitTextIntoChunks(text, maxChars = 2800) {
+            const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+            const chunks = [];
+            let currentChunk = '';
+
+            for (const para of paragraphs) {
+                if ((currentChunk + '\n\n' + para).length <= maxChars) {
+                    currentChunk = currentChunk ? `${currentChunk}\n\n${para}` : para;
+                } else {
+                    if (currentChunk) {
+                        chunks.push(currentChunk);
+                        currentChunk = '';
+                    }
+                    // If a single paragraph is larger than maxChars, split by sentence boundaries
+                    if (para.length > maxChars) {
+                        const sentences = para.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g) || [para];
+                        for (const s of sentences) {
+                            if ((currentChunk + ' ' + s).length <= maxChars) {
+                                currentChunk = currentChunk ? `${currentChunk} ${s.trim()}` : s.trim();
+                            } else {
+                                if (currentChunk) chunks.push(currentChunk);
+                                currentChunk = s.trim();
+                            }
+                        }
+                    } else {
+                        currentChunk = para;
+                    }
+                }
+            }
+            if (currentChunk) chunks.push(currentChunk);
+            return chunks;
+        }
+
+        // Gemini API Call with Exponential Backoff & Structured JSON Output
+        async function translateChunkWithGemini(chunkText, customRules, glossary) {
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const glossaryInstruction = glossary.trim()
+                ? `\n【固定專有名詞與角色譯名表】：${glossary.trim()}`
+                : '';
+
+            const systemPrompt = `你是一位頂尖的台灣文學小說翻譯家。
+${customRules}${glossaryInstruction}
+
+【輸出結構要求】：
+請將使用者提供的原文，逐句拆解並翻譯為自然、流暢、優美的台灣繁體中文。
+- 每一個物件代表一個句子對照：包含 "en" (完整的英文原句，不可刪減) 與 "zh" (對應的台灣繁體中文翻譯)。
+- 若遇到段落換行，請在該段落最後一句的 "isParagraphEnd" 設為 true。
+- 絕對不要使用粗體符號 (**)、不要翻成中國武俠小說腔調、不要擅自漏翻任何一句話、也不要自己擴寫原文沒有的劇情。`;
+
+            const payload = {
+                contents: [{
+                    role: "user",
+                    parts: [{ text: `請嚴格依照規則，逐句完整翻譯以下內容（共 ${chunkText.length} 字元）：\n\n${chunkText}` }]
+                }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                en: { type: "STRING", description: "Original English sentence without omission" },
+                                zh: { type: "STRING", description: "Natural, refined Traditional Chinese translation of the sentence" },
+                                isParagraphEnd: { type: "BOOLEAN", description: "True if this sentence is at the end of a paragraph" }
+                            },
+                            required: ["en", "zh", "isParagraphEnd"],
+                            propertyOrdering: ["en", "zh", "isParagraphEnd"]
+                        }
+                    }
+                }
+            };
+
+            const delays = [1000, 2000, 4000, 8000];
+            let lastError = null;
+
+            for (let attempt = 0; attempt <= delays.length; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP 狀態碼 ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!jsonText) {
+                        throw new Error('模型未回傳有效翻譯內容');
+                    }
+
+                    return JSON.parse(jsonText);
+                } catch (err) {
+                    lastError = err;
+                    if (attempt < delays.length) {
+                        await new Promise(r => setTimeout(r, delays[attempt]));
+                    }
+                }
+            }
+            throw lastError;
+        }
+
+        // Render Translated Chunks into Reading View
+        function renderTranslations() {
+            if (translatedChunks.length === 0) {
+                emptyState.classList.remove('hidden');
+                translationResults.classList.add('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            translationResults.classList.remove('hidden');
+            translationResults.innerHTML = '';
+
+            const currentFont = fontSizes[fontSizeIndex];
+
+            translatedChunks.forEach((chunkObj) => {
+                const sectionEl = document.createElement('div');
+                sectionEl.className = 'space-y-4';
+
+                let currentParagraphDiv = document.createElement('div');
+                currentParagraphDiv.className = 'space-y-3 pb-3 border-b border-stone-100 dark:border-stone-800/70 last:border-none';
+
+                chunkObj.pairs.forEach((pair) => {
+                    const pairBox = document.createElement('div');
+                    pairBox.className = 'group rounded-xl p-2 -mx-2 hover:bg-amber-50/50 dark:hover:bg-stone-700/30 transition';
+
+                    if (viewMode === 'bilingual') {
+                        const enP = document.createElement('p');
+                        enP.className = `${currentFont.enClass} font-sans text-stone-500 dark:text-stone-400 mb-1 leading-relaxed select-text`;
+                        enP.textContent = pair.en.replace(/\*\*/g, '');
+                        pairBox.appendChild(enP);
+                    }
+
+                    const zhP = document.createElement('p');
+                    zhP.className = `${currentFont.zhClass} font-serif text-stone-900 dark:text-stone-100 leading-relaxed select-text`;
+                    zhP.textContent = pair.zh.replace(/\*\*/g, '');
+                    pairBox.appendChild(zhP);
+
+                    currentParagraphDiv.appendChild(pairBox);
+
+                    if (pair.isParagraphEnd) {
+                        sectionEl.appendChild(currentParagraphDiv);
+                        currentParagraphDiv = document.createElement('div');
+                        currentParagraphDiv.className = 'space-y-3 pb-3 border-b border-stone-100 dark:border-stone-800/70 last:border-none';
+                    }
+                });
+
+                if (currentParagraphDiv.children.length > 0) {
+                    sectionEl.appendChild(currentParagraphDiv);
+                }
+
+                translationResults.appendChild(sectionEl);
+            });
+        }
+
+        // Main Translation Workflow
+        btnTranslate.addEventListener('click', async () => {
+            const rawText = sourceTextarea.value.trim();
+            if (!rawText) {
+                showToast('請先輸入或上傳想要翻譯的內容！', 'error');
+                return;
+            }
+
+            if (isTranslating) return;
+
+            isTranslating = true;
+            stopRequested = false;
+            translatedChunks = [];
+            renderTranslations();
+
+            btnTranslate.disabled = true;
+            btnStop.classList.remove('hidden');
+            progressWrapper.classList.remove('hidden');
+
+            const maxChars = parseInt(chunkSizeSelect.value, 10) || 2800;
+            const chunks = splitTextIntoChunks(rawText, maxChars);
+            const customRules = customRulesTextarea.value;
+            const glossary = glossaryInput.value;
+
+            try {
+                for (let i = 0; i < chunks.length; i++) {
+                    if (stopRequested) {
+                        showToast(`已手動停止翻譯（已完成 ${i} / ${chunks.length} 段）`, 'info');
+                        break;
+                    }
+
+                    const pct = Math.round((i / chunks.length) * 100);
+                    progressStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-600 animate-ping"></span> 正在精準逐句翻譯第 ${i + 1} / ${chunks.length} 段...`;
+                    progressPercent.textContent = `${pct}%`;
+                    progressBar.style.width = `${pct}%`;
+
+                    const pairs = await translateChunkWithGemini(chunks[i], customRules, glossary);
+                    translatedChunks.push({ chunkIndex: i, pairs });
+                    renderTranslations();
+                }
+
+                if (!stopRequested) {
+                    progressStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-600"></span> 全部翻譯完成！（共 ${chunks.length} 段）`;
+                    progressPercent.textContent = '100%';
+                    progressBar.style.width = '100%';
+                    showToast('全文翻譯完成！', 'success');
+                }
+            } catch (err) {
+                console.error(err);
+                progressStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> 翻譯途中發生錯誤`;
+                showToast(`翻譯過程發生錯誤：${err.message}`, 'error');
+            } finally {
+                isTranslating = false;
+                btnTranslate.disabled = false;
+                btnStop.classList.add('hidden');
+            }
+        });
+
+        btnStop.addEventListener('click', () => {
+            stopRequested = true;
+            progressStatus.textContent = '正在等待當前段落完成後停止...';
+        });
+
+        // View Mode Toggle (Bilingual vs Chinese Only)
+        const btnViewBilingual = document.getElementById('view-bilingual');
+        const btnViewZhOnly = document.getElementById('view-zh-only');
+
+        btnViewBilingual.addEventListener('click', () => {
+            viewMode = 'bilingual';
+            btnViewBilingual.className = 'px-3 py-1.5 rounded-lg text-xs font-medium transition bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-sm flex items-center gap-1.5';
+            btnViewZhOnly.className = 'px-3 py-1.5 rounded-lg text-xs font-medium transition text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white flex items-center gap-1.5';
+            renderTranslations();
+        });
+
+        btnViewZhOnly.addEventListener('click', () => {
+            viewMode = 'zh-only';
+            btnViewZhOnly.className = 'px-3 py-1.5 rounded-lg text-xs font-medium transition bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-sm flex items-center gap-1.5';
+            btnViewBilingual.className = 'px-3 py-1.5 rounded-lg text-xs font-medium transition text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white flex items-center gap-1.5';
+            renderTranslations();
+        });
+
+        // Font Size Toggle
+        document.getElementById('btn-font-size').addEventListener('click', () => {
+            fontSizeIndex = (fontSizeIndex + 1) % fontSizes.length;
+            document.getElementById('font-size-label').textContent = fontSizes[fontSizeIndex].label;
+            renderTranslations();
+        });
+
+        // Format Output Text for Copy / Download
+        function getFormattedOutputText() {
+            if (translatedChunks.length === 0) return '';
+            const lines = [];
+            translatedChunks.forEach(chunk => {
+                chunk.pairs.forEach(pair => {
+                    const cleanEn = pair.en.replace(/\*\*/g, '').trim();
+                    const cleanZh = pair.zh.replace(/\*\*/g, '').trim();
+                    if (viewMode === 'bilingual') {
+                        lines.push(cleanEn);
+                        lines.push(cleanZh);
+                        lines.push(''); // Blank line between sentence pairs for readability
+                    } else {
+                        lines.push(cleanZh);
+                        if (pair.isParagraphEnd) lines.push('');
+                    }
+                });
+            });
+            return lines.join('\n').trim();
+        }
+
+        // Copy to Clipboard (using document.execCommand for iframe compatibility)
+        document.getElementById('btn-copy').addEventListener('click', () => {
+            const text = getFormattedOutputText();
+            if (!text) {
+                showToast('目前尚無可複製的翻譯結果', 'error');
+                return;
+            }
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = text;
+            document.body.appendChild(tempTextarea);
+            tempTextarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextarea);
+            showToast(`已複製${viewMode === 'bilingual' ? '中英對照' : '純中文'}翻譯結果至剪貼簿！`, 'success');
+        });
+
+        // Download as .txt
+        document.getElementById('btn-download-txt').addEventListener('click', () => {
+            const text = getFormattedOutputText();
+            if (!text) {
+                showToast('目前尚無可下載的翻譯結果', 'error');
+                return;
+            }
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `gemini-translation-${viewMode}-${new Date().toISOString().slice(0, 10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('已開始下載 .txt 翻譯檔案', 'success');
+        });
+    </script>
+</body>
+</html>
